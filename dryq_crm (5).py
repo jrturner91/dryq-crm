@@ -4,19 +4,23 @@ import math
 from datetime import datetime
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DryQ CRM — Replit-Ready Version
+# DryQ CRM — Airtable-Backed Version
 # ═══════════════════════════════════════════════════════════════════════════════
-# Run:  streamlit run dryq_crm.py
-#
-# FUTURE SYNC UPGRADE:
-# When you're ready to add shared persistence, swap the session_state storage
-# for Airtable. Look for comments marked "# 🔌 AIRTABLE SYNC POINT" below.
-# You'll need:
-#   pip install pyairtable
-#   An Airtable account (free tier works)
-#   A Personal Access Token from https://airtable.com/create/tokens
-#   A base with a table matching the COLUMNS below
+# Setup:
+#   1. pip install pyairtable (add to requirements.txt)
+#   2. In Streamlit Cloud → Settings → Secrets, add:
+#        AIRTABLE_API_KEY = "patXXXXXXXXXXXXXX"
+#        AIRTABLE_BASE_ID = "appXXXXXXXXXXXXXX"
+#   3. Create an Airtable base called "DryQ CRM" with a table called "Leads"
+#      Fields: Lead Name (text), Lead Type (single select), Location (text),
+#              Audience Size (number), Engagement Score (number),
+#              Est Weekly Turnout (number), Num Locations (number),
+#              Charlotte Hub (checkbox), Notes (long text),
+#              Status (single select), Assigned To (single select),
+#              Last Updated (text)
 # ═══════════════════════════════════════════════════════════════════════════════
+
+from pyairtable import Api
 
 # ── Page Config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -38,7 +42,7 @@ COLUMNS = [
 ]
 
 # ── DryQ Logo (base64 embedded) ─────────────────────────────────────────────
-LOGO_B64 = "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"
+LOGO_B64 = "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"
 
 # ── Custom CSS ───────────────────────────────────────────────────────────────
 st.markdown("""
@@ -87,8 +91,90 @@ st.markdown("""
   .tag-runclub    { background:#FF4B00; color:#fff; }
   .tag-shop       { background:#FFB300; color:#000; }
   .tag-influencer { background:#00C9A7; color:#000; }
+
+  .sync-badge {
+    display: inline-block;
+    background: #1a2a1a;
+    border: 1px solid #2a5a2a;
+    color: #4CAF50;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-family: 'Barlow Condensed', sans-serif;
+    letter-spacing: 0.05em;
+  }
+  .sync-badge-err {
+    background: #2a1a1a;
+    border-color: #5a2a2a;
+    color: #FF4B00;
+  }
 </style>
 """, unsafe_allow_html=True)
+
+
+# ── Airtable Connection ──────────────────────────────────────────────────────
+@st.cache_resource
+def get_table():
+    api = Api(st.secrets["AIRTABLE_API_KEY"])
+    return api.table(st.secrets["AIRTABLE_BASE_ID"], "Leads")
+
+
+# ── Load from Airtable ───────────────────────────────────────────────────────
+def load_leads():
+    """Pull all records from Airtable and return as DataFrame."""
+    try:
+        table = get_table()
+        records = table.all()
+        if not records:
+            return pd.DataFrame(columns=COLUMNS + ["_airtable_id"])
+        rows = []
+        for r in records:
+            f = r["fields"].copy()
+            f["_airtable_id"] = r["id"]
+            rows.append(f)
+        df = pd.DataFrame(rows)
+        # Ensure all expected columns exist with safe defaults
+        defaults = {
+            "Lead Name": "", "Lead Type": "Run Club", "Location": "",
+            "Audience Size": 0, "Engagement Score": 5, "Est Weekly Turnout": 0,
+            "Num Locations": 1, "Charlotte Hub": False, "Notes": "",
+            "Status": "New", "Assigned To": "Unassigned", "Last Updated": "",
+            "_airtable_id": "",
+        }
+        for col, default in defaults.items():
+            if col not in df.columns:
+                df[col] = default
+        # Coerce numeric columns
+        for col in ["Audience Size", "Engagement Score", "Est Weekly Turnout", "Num Locations"]:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+        df["Charlotte Hub"] = df["Charlotte Hub"].fillna(False).astype(bool)
+        return df
+    except Exception as e:
+        st.error(f"⚠️ Could not connect to Airtable: {e}")
+        return pd.DataFrame(columns=COLUMNS + ["_airtable_id"])
+
+
+# ── Push helpers ─────────────────────────────────────────────────────────────
+def airtable_fields(row_dict):
+    """Strip internal keys and prep a clean dict for Airtable."""
+    skip = {"_airtable_id", "Est Revenue Potential ($)", "Priority Score", "Priority Tier"}
+    return {k: v for k, v in row_dict.items() if k not in skip}
+
+
+def create_lead(fields: dict):
+    table = get_table()
+    record = table.create(airtable_fields(fields))
+    return record["id"]
+
+
+def update_lead(airtable_id: str, fields: dict):
+    table = get_table()
+    table.update(airtable_id, airtable_fields(fields))
+
+
+def delete_lead(airtable_id: str):
+    table = get_table()
+    table.delete(airtable_id)
 
 
 # ── Priority & Revenue Calculations ─────────────────────────────────────────
@@ -135,46 +221,10 @@ def priority_tier(score):
     return "⚪ Low"
 
 
-# ── Default Lead Data ────────────────────────────────────────────────────────
-DEFAULT_LEADS = [
-    {"Lead Name": "Mad Miles Run Club", "Lead Type": "Run Club", "Location": "South End, Charlotte", "Audience Size": 1200, "Engagement Score": 9, "Est Weekly Turnout": 120, "Num Locations": 0, "Charlotte Hub": True, "Notes": "High-energy group, strong social presence", "Status": "Contacted", "Assigned To": "JT", "Last Updated": ""},
-    {"Lead Name": "Barn Burners RC", "Lead Type": "Run Club", "Location": "NoDa, Charlotte", "Audience Size": 900, "Engagement Score": 8, "Est Weekly Turnout": 90, "Num Locations": 0, "Charlotte Hub": True, "Notes": "Craft beer + miles vibe, loyal members", "Status": "New", "Assigned To": "Unassigned", "Last Updated": ""},
-    {"Lead Name": "Charlotte Running Club", "Lead Type": "Run Club", "Location": "Uptown, Charlotte", "Audience Size": 2500, "Engagement Score": 7, "Est Weekly Turnout": 200, "Num Locations": 0, "Charlotte Hub": True, "Notes": "Largest CLT club, diverse pace groups", "Status": "Qualified", "Assigned To": "CB", "Last Updated": ""},
-    {"Lead Name": "Dilworth Dash Crew", "Lead Type": "Run Club", "Location": "Dilworth, Charlotte", "Audience Size": 450, "Engagement Score": 8, "Est Weekly Turnout": 60, "Num Locations": 0, "Charlotte Hub": True, "Notes": "Neighborhood feel, strong retention", "Status": "New", "Assigned To": "Unassigned", "Last Updated": ""},
-    {"Lead Name": "Raleigh Running Collective", "Lead Type": "Run Club", "Location": "Raleigh, NC", "Audience Size": 1800, "Engagement Score": 7, "Est Weekly Turnout": 150, "Num Locations": 0, "Charlotte Hub": False, "Notes": "Large RDU base, potential second market", "Status": "New", "Assigned To": "Unassigned", "Last Updated": ""},
-    {"Lead Name": "Asheville Trail Runners", "Lead Type": "Run Club", "Location": "Asheville, NC", "Audience Size": 700, "Engagement Score": 9, "Est Weekly Turnout": 70, "Num Locations": 0, "Charlotte Hub": False, "Notes": "Trail-focused, gear-savvy crowd", "Status": "Contacted", "Assigned To": "JM", "Last Updated": ""},
-    {"Lead Name": "Queen City Pacers", "Lead Type": "Run Club", "Location": "Plaza Midwood, Charlotte", "Audience Size": 600, "Engagement Score": 8, "Est Weekly Turnout": 80, "Num Locations": 0, "Charlotte Hub": True, "Notes": "Mixed pace, growing fast", "Status": "New", "Assigned To": "Unassigned", "Last Updated": ""},
-    {"Lead Name": "Durham Running Co. Crew", "Lead Type": "Run Club", "Location": "Durham, NC", "Audience Size": 950, "Engagement Score": 7, "Est Weekly Turnout": 100, "Num Locations": 0, "Charlotte Hub": False, "Notes": "Active Bull City group", "Status": "New", "Assigned To": "Unassigned", "Last Updated": ""},
-    {"Lead Name": "Charlotte Running Company", "Lead Type": "Specialty Shop", "Location": "SouthPark, Charlotte", "Audience Size": 5000, "Engagement Score": 8, "Est Weekly Turnout": 0, "Num Locations": 2, "Charlotte Hub": True, "Notes": "2 CLT locations, trusted local brand", "Status": "Negotiating", "Assigned To": "JT", "Last Updated": ""},
-    {"Lead Name": "Run For Your Life", "Lead Type": "Specialty Shop", "Location": "Dilworth, Charlotte", "Audience Size": 3500, "Engagement Score": 7, "Est Weekly Turnout": 0, "Num Locations": 3, "Charlotte Hub": True, "Notes": "3 NC locations, community-first retailer", "Status": "Qualified", "Assigned To": "CB", "Last Updated": ""},
-    {"Lead Name": "Fleet Feet Charlotte", "Lead Type": "Specialty Shop", "Location": "Pineville, Charlotte", "Audience Size": 8000, "Engagement Score": 6, "Est Weekly Turnout": 0, "Num Locations": 1, "Charlotte Hub": True, "Notes": "National brand, local staff buy-in needed", "Status": "Contacted", "Assigned To": "JP", "Last Updated": ""},
-    {"Lead Name": "Triangle Running Co.", "Lead Type": "Specialty Shop", "Location": "Cary, NC", "Audience Size": 2200, "Engagement Score": 7, "Est Weekly Turnout": 0, "Num Locations": 1, "Charlotte Hub": False, "Notes": "Strong RDU specialty presence", "Status": "New", "Assigned To": "Unassigned", "Last Updated": ""},
-    {"Lead Name": "New Balance Raleigh", "Lead Type": "Specialty Shop", "Location": "Raleigh, NC", "Audience Size": 4000, "Engagement Score": 5, "Est Weekly Turnout": 0, "Num Locations": 1, "Charlotte Hub": False, "Notes": "Branded store, longer sales cycle", "Status": "New", "Assigned To": "Unassigned", "Last Updated": ""},
-    {"Lead Name": "Paige Runs CLT", "Lead Type": "Influencer", "Location": "South End, Charlotte", "Audience Size": 18000, "Engagement Score": 9, "Est Weekly Turnout": 0, "Num Locations": 0, "Charlotte Hub": True, "Notes": "Relatable marathon runner, IG + TikTok", "Status": "Contacted", "Assigned To": "AW", "Last Updated": ""},
-    {"Lead Name": "NCRunner_Mike", "Lead Type": "Influencer", "Location": "Raleigh, NC", "Audience Size": 12000, "Engagement Score": 8, "Est Weekly Turnout": 0, "Num Locations": 0, "Charlotte Hub": False, "Notes": "Strava ambassador, gear reviews", "Status": "New", "Assigned To": "Unassigned", "Last Updated": ""},
-    {"Lead Name": "SweatyMama_CLT", "Lead Type": "Influencer", "Location": "Huntersville, Charlotte", "Audience Size": 9500, "Engagement Score": 9, "Est Weekly Turnout": 0, "Num Locations": 0, "Charlotte Hub": True, "Notes": "Mom runner niche, high product trust", "Status": "Qualified", "Assigned To": "AW", "Last Updated": ""},
-    {"Lead Name": "TrailheadTobias", "Lead Type": "Influencer", "Location": "Asheville, NC", "Audience Size": 22000, "Engagement Score": 7, "Est Weekly Turnout": 0, "Num Locations": 0, "Charlotte Hub": False, "Notes": "Trail & ultra focus, national reach", "Status": "New", "Assigned To": "Unassigned", "Last Updated": ""},
-    {"Lead Name": "CLT5K Queen", "Lead Type": "Influencer", "Location": "NoDa, Charlotte", "Audience Size": 7200, "Engagement Score": 10, "Est Weekly Turnout": 0, "Num Locations": 0, "Charlotte Hub": True, "Notes": "5K community builder, very engaged", "Status": "Contacted", "Assigned To": "JM", "Last Updated": ""},
-]
-
-
-# ── Session State ────────────────────────────────────────────────────────────
-# 🔌 AIRTABLE SYNC POINT: Replace session_state init with Airtable load
-# from pyairtable import Api
-# api = Api("YOUR_AIRTABLE_TOKEN")
-# table = api.table("YOUR_BASE_ID", "Leads")
-# records = table.all()
-# Then convert records to DataFrame instead of using DEFAULT_LEADS
-
+# ── Session State — load once per session ────────────────────────────────────
 if "leads_df" not in st.session_state:
-    st.session_state.leads_df = pd.DataFrame(DEFAULT_LEADS)
-
-
-def save_data():
-    """Save current state. Currently a no-op; replace with Airtable push."""
-    # 🔌 AIRTABLE SYNC POINT: Push changes to Airtable here
-    # table.batch_upsert(records, key_fields=["Lead Name"])
-    pass
+    st.session_state.leads_df = load_leads()
+    st.session_state.last_loaded = datetime.now()
 
 
 # ── Build enriched dataframe ─────────────────────────────────────────────────
@@ -196,6 +246,20 @@ with st.sidebar:
         <p style="color:#555; font-size:0.7rem;">$28 retail · $24 early · $14 wholesale</p>
     </div>
     """, unsafe_allow_html=True)
+
+    # Live sync indicator
+    loaded_at = st.session_state.get("last_loaded")
+    if loaded_at:
+        st.markdown(
+            f'<div style="text-align:center; margin-bottom:8px;">'
+            f'<span class="sync-badge">● Live · Airtable</span></div>',
+            unsafe_allow_html=True,
+        )
+
+    if st.button("🔄 Refresh from Airtable", use_container_width=True):
+        st.session_state.leads_df = load_leads()
+        st.session_state.last_loaded = datetime.now()
+        st.rerun()
 
     st.markdown("---")
 
@@ -287,22 +351,30 @@ with st.expander("Click to add a new lead", expanded=False):
                 st.error("Lead name is required.")
             else:
                 new_lead = {
-                    "Lead Name": new_name.strip(), "Lead Type": new_type,
-                    "Location": new_location, "Audience Size": new_audience,
-                    "Engagement Score": new_engagement, "Est Weekly Turnout": new_turnout,
-                    "Num Locations": new_locations, "Charlotte Hub": new_hub,
-                    "Notes": new_notes, "Status": new_status,
+                    "Lead Name": new_name.strip(),
+                    "Lead Type": new_type,
+                    "Location": new_location,
+                    "Audience Size": new_audience,
+                    "Engagement Score": new_engagement,
+                    "Est Weekly Turnout": new_turnout,
+                    "Num Locations": new_locations,
+                    "Charlotte Hub": new_hub,
+                    "Notes": new_notes,
+                    "Status": new_status,
                     "Assigned To": new_assigned,
                     "Last Updated": datetime.now().strftime("%Y-%m-%d %H:%M"),
                 }
-                st.session_state.leads_df = pd.concat(
-                    [st.session_state.leads_df, pd.DataFrame([new_lead])],
-                    ignore_index=True,
-                )
-                # 🔌 AIRTABLE SYNC POINT: table.create(new_lead)
-                save_data()
-                st.success(f"✅ Added '{new_name}' to the pipeline!")
-                st.rerun()
+                try:
+                    new_id = create_lead(new_lead)
+                    new_lead["_airtable_id"] = new_id
+                    st.session_state.leads_df = pd.concat(
+                        [st.session_state.leads_df, pd.DataFrame([new_lead])],
+                        ignore_index=True,
+                    )
+                    st.success(f"✅ '{new_name}' saved to Airtable!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Failed to save to Airtable: {e}")
 
 st.markdown("---")
 
@@ -389,7 +461,7 @@ if lead_names:
             delete_submitted = st.form_submit_button("🗑️ Delete Lead", use_container_width=True)
 
         if update_submitted:
-            st.session_state.leads_df.loc[lead_idx] = {
+            updated = {
                 "Lead Name": upd_name, "Lead Type": upd_type,
                 "Location": upd_location, "Audience Size": upd_audience,
                 "Engagement Score": upd_engagement, "Est Weekly Turnout": upd_turnout,
@@ -398,17 +470,28 @@ if lead_names:
                 "Assigned To": upd_assigned,
                 "Last Updated": datetime.now().strftime("%Y-%m-%d %H:%M"),
             }
-            # 🔌 AIRTABLE SYNC POINT: table.update(record_id, updated_fields)
-            save_data()
-            st.success(f"✅ Updated '{upd_name}'!")
-            st.rerun()
+            try:
+                airtable_id = lead_data.get("_airtable_id", "")
+                if airtable_id:
+                    update_lead(airtable_id, updated)
+                updated["_airtable_id"] = airtable_id
+                for k, v in updated.items():
+                    st.session_state.leads_df.loc[lead_idx, k] = v
+                st.success(f"✅ '{upd_name}' updated in Airtable!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Airtable update failed: {e}")
 
         if delete_submitted:
-            st.session_state.leads_df = st.session_state.leads_df.drop(lead_idx).reset_index(drop=True)
-            # 🔌 AIRTABLE SYNC POINT: table.delete(record_id)
-            save_data()
-            st.success(f"🗑️ Deleted '{selected_lead_name}'.")
-            st.rerun()
+            try:
+                airtable_id = lead_data.get("_airtable_id", "")
+                if airtable_id:
+                    delete_lead(airtable_id)
+                st.session_state.leads_df = st.session_state.leads_df.drop(lead_idx).reset_index(drop=True)
+                st.success(f"🗑️ '{selected_lead_name}' deleted from Airtable.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Airtable delete failed: {e}")
 
 
 # ── Quick Assign ─────────────────────────────────────────────────────────────
@@ -430,11 +513,16 @@ if unassigned:
                 idx = st.session_state.leads_df[
                     st.session_state.leads_df["Lead Name"] == lead_name
                 ].index[0]
-                st.session_state.leads_df.loc[idx, "Assigned To"] = new_owner
-                st.session_state.leads_df.loc[idx, "Last Updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                # 🔌 AIRTABLE SYNC POINT: table.update(record_id, {"Assigned To": new_owner})
-                save_data()
-                st.rerun()
+                airtable_id = st.session_state.leads_df.loc[idx, "_airtable_id"]
+                ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+                try:
+                    if airtable_id:
+                        update_lead(airtable_id, {"Assigned To": new_owner, "Last Updated": ts})
+                    st.session_state.leads_df.loc[idx, "Assigned To"] = new_owner
+                    st.session_state.leads_df.loc[idx, "Last Updated"] = ts
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Quick assign failed: {e}")
 else:
     st.success("All leads are assigned!")
 
@@ -459,7 +547,7 @@ with col_c:
     st.bar_chart(status_counts.set_index("Status"), color="#00C9A7")
 
 
-# ── Priority Formula Guide ──────────────────────────────────────────────────
+# ── Priority Formula Guide ───────────────────────────────────────────────────
 st.markdown("---")
 st.markdown('<div class="section-header">Priority Score Logic ("Charlotte Model")</div>', unsafe_allow_html=True)
 
